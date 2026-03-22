@@ -194,6 +194,48 @@ const state = {
   createDraft: initialDraft(),
 };
 
+function sentenceSplit(text) {
+  return String(text || "")
+    .split(/(?<=[.!?。！？\n])\s+|\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function makeClockLabel() {
+  return new Date().toTimeString().slice(0, 5);
+}
+
+function appendTicketLog(job, title, detail, level = "info") {
+  job.logs.unshift({
+    time: makeClockLabel(),
+    title,
+    detail,
+    level,
+  });
+}
+
+function hydrateJob(job) {
+  const scriptSeed = [job.script?.headline, ...(job.script?.body || [])].filter(Boolean).join(". ");
+  const seededText = (job.voice_script_text || scriptSeed || "").trim();
+  const lines = sentenceSplit(seededText);
+  const estDuration = Math.max(2, Number((seededText.length / 9).toFixed(2)));
+
+  job.voice_script_text = seededText;
+  job.sourceVideoPath = job.sourceVideoPath || `videos/${job.id}.mp4`;
+  job.generatedAudioPath = job.generatedAudioPath || "";
+  job.finalRenderPath = job.finalRenderPath || "";
+  job.pipelineStatus = job.pipelineStatus || "대기";
+  job.pipelineError = job.pipelineError || "";
+  job.subtitleSegments = job.subtitleSegments || lines.map((text, index) => ({
+    index: index + 1,
+    start: Number((index * (estDuration / Math.max(lines.length, 1))).toFixed(2)),
+    end: Number(((index + 1) * (estDuration / Math.max(lines.length, 1))).toFixed(2)),
+    text,
+  }));
+}
+
+mockJobs.forEach(hydrateJob);
+
 const root = document.querySelector("#app");
 
 function escapeHtml(value) {
@@ -634,18 +676,91 @@ function renderScriptTab(job) {
   `;
 }
 
+function runVoicePipeline(job, { retry = false } = {}) {
+  const voiceScriptText = String(job.voice_script_text || "").trim();
+  appendTicketLog(job, retry ? "재시도 시작" : "파이프라인 시작", "보이스/자막/최종 렌더 통합 파이프라인을 시작합니다.");
+
+  if (!voiceScriptText) {
+    job.pipelineStatus = "실패";
+    job.pipelineError = "voice_script_text가 비어 있어 ElevenLabs 입력을 만들 수 없습니다.";
+    appendTicketLog(job, "실패", job.pipelineError, "error");
+    return;
+  }
+
+  if (!job.sourceVideoPath) {
+    job.pipelineStatus = "실패";
+    job.pipelineError = "원본 영상 경로가 없어 FFmpeg 합성을 진행할 수 없습니다.";
+    appendTicketLog(job, "실패", job.pipelineError, "error");
+    return;
+  }
+
+  job.pipelineStatus = "실행 중";
+  job.pipelineError = "";
+
+  const charDuration = Math.max(2.5, Number((voiceScriptText.length / 8.7).toFixed(2)));
+  const sentences = sentenceSplit(voiceScriptText);
+
+  job.generatedAudioPath = `audios/${job.id}_${Date.now()}.mp3`;
+  appendTicketLog(job, "TTS 완료", `ElevenLabs 입력에 voice_script_text를 사용해 오디오를 생성했습니다. (${job.generatedAudioPath})`);
+
+  let cursor = 0;
+  job.subtitleSegments = sentences.map((text, index) => {
+    const weight = Math.max(1, text.length);
+    const duration = Number(((charDuration * weight) / Math.max(voiceScriptText.length, 1)).toFixed(2));
+    const start = Number(cursor.toFixed(2));
+    const end = Number((cursor + duration).toFixed(2));
+    cursor = end;
+    return { index: index + 1, start, end, text };
+  });
+  appendTicketLog(job, "자막 생성", `${job.subtitleSegments.length}개 문장 세그먼트를 음성 길이 타임스탬프로 생성했습니다.`);
+
+  job.finalRenderPath = `done/${job.id}/final_${job.id}.mp4`;
+  job.pipelineStatus = "완료";
+  job.status = "완료";
+  job.progress = 100;
+  job.voice.status = "보이스 완료";
+  job.subtitles.status = "자동 생성 완료";
+
+  const subtitlePreview = `tmp/${job.id}.srt`;
+  appendTicketLog(
+    job,
+    "FFmpeg 합성 완료",
+    `원본영상(${job.sourceVideoPath}) + 생성오디오(${job.generatedAudioPath}) + 자막(${subtitlePreview})을 합성해 ${job.finalRenderPath} 생성`,
+  );
+}
+
 function renderVoiceTab(job) {
   return `
-    <div class="card detail-card">
-      <div class="badge-row">
-        ${renderBadge(job.voice.status)}
-        ${renderBadge(job.voice.talent)}
+    <div class="stack">
+      <div class="card detail-card">
+        <div class="badge-row">
+          ${renderBadge(job.voice.status)}
+          ${renderBadge(job.voice.talent)}
+        </div>
+        <div class="info-grid">
+          ${renderInfoCard("톤", job.voice.mood)}
+          ${renderInfoCard("속도", job.voice.speed)}
+          ${renderInfoCard("피치", job.voice.pitch)}
+          ${renderInfoCard("메모", job.voice.memo)}
+        </div>
       </div>
-      <div class="info-grid">
-        ${renderInfoCard("톤", job.voice.mood)}
-        ${renderInfoCard("속도", job.voice.speed)}
-        ${renderInfoCard("피치", job.voice.pitch)}
-        ${renderInfoCard("메모", job.voice.memo)}
+
+      <div class="card detail-card stack">
+        <h3 class="title-md">voice_script_text</h3>
+        <p class="body-sm">티켓에 저장되며 ElevenLabs 입력으로 바로 사용됩니다.</p>
+        <textarea
+          class="textarea"
+          data-role="voice-script-text"
+          data-job-id="${job.id}"
+          placeholder="보이스 스크립트를 입력하세요."
+        >${escapeHtml(job.voice_script_text || "")}</textarea>
+        <div class="badge-row">
+          ${renderBadge(`파이프라인 ${job.pipelineStatus || "대기"}`)}
+          ${job.generatedAudioPath ? renderBadge(`오디오 경로 저장`) : renderBadge("오디오 미생성")}
+        </div>
+        <button class="button button-primary" type="button" data-action="run-pipeline" data-job-id="${job.id}">
+          보이스/자막/렌더 파이프라인 실행
+        </button>
       </div>
     </div>
   `;
@@ -653,15 +768,25 @@ function renderVoiceTab(job) {
 
 function renderSubtitleTab(job) {
   return `
-    <div class="card detail-card">
-      <div class="badge-row">
-        ${renderBadge(job.subtitles.status)}
-        ${renderBadge("자막 스타일")}
+    <div class="stack">
+      <div class="card detail-card">
+        <div class="badge-row">
+          ${renderBadge(job.subtitles.status)}
+          ${renderBadge("자막 스타일")}
+        </div>
+        <p class="body-md">스타일: ${escapeHtml(job.subtitles.style)}</p>
+        <p class="body-md">강조 규칙: ${escapeHtml(job.subtitles.emphasis)}</p>
+        <div class="stack">
+          ${job.subtitles.sample.map((line) => `<div class="quote">${escapeHtml(line)}</div>`).join("")}
+        </div>
       </div>
-      <p class="body-md">스타일: ${escapeHtml(job.subtitles.style)}</p>
-      <p class="body-md">강조 규칙: ${escapeHtml(job.subtitles.emphasis)}</p>
-      <div class="stack">
-        ${job.subtitles.sample.map((line) => `<div class="quote">${escapeHtml(line)}</div>`).join("")}
+      <div class="card detail-card">
+        <h3 class="title-md">타임스탬프 세그먼트</h3>
+        <div class="stack">
+          ${(job.subtitleSegments || []).map((seg) => `
+            <div class="quote">[${seg.start.toFixed(2)}s - ${seg.end.toFixed(2)}s] ${escapeHtml(seg.text)}</div>
+          `).join("") || '<p class="body-md">아직 생성된 자막이 없습니다.</p>'}
+        </div>
       </div>
     </div>
   `;
@@ -669,14 +794,26 @@ function renderSubtitleTab(job) {
 
 function renderDeliverablesTab(job) {
   return `
-    <div class="result-grid">
-      ${job.deliverables.map((item) => `
-        <div class="card result-card">
-          <div class="badge-row">${renderBadge(item.status)}</div>
-          <h3 class="title-md">${escapeHtml(item.label)}</h3>
-          <p class="body-md">${escapeHtml(item.note)}</p>
-        </div>
-      `).join("")}
+    <div class="stack">
+      <div class="result-grid">
+        ${job.deliverables.map((item) => `
+          <div class="card result-card">
+            <div class="badge-row">${renderBadge(item.status)}</div>
+            <h3 class="title-md">${escapeHtml(item.label)}</h3>
+            <p class="body-md">${escapeHtml(item.note)}</p>
+          </div>
+        `).join("")}
+      </div>
+      <div class="card detail-card stack">
+        <h3 class="title-md">최종 렌더 상태</h3>
+        <p class="body-md">원본 영상: ${escapeHtml(job.sourceVideoPath || "-")}</p>
+        <p class="body-md">생성 오디오: ${escapeHtml(job.generatedAudioPath || "-")}</p>
+        <p class="body-md">최종 MP4: ${escapeHtml(job.finalRenderPath || "-")}</p>
+        ${job.pipelineError ? `<p class="body-md">실패 원인: ${escapeHtml(job.pipelineError)}</p>` : ""}
+        ${job.pipelineStatus === "실패"
+          ? `<button class="button button-secondary" type="button" data-action="retry-pipeline" data-job-id="${job.id}">실패 단계 재시도</button>`
+          : ""}
+      </div>
     </div>
   `;
 }
@@ -842,6 +979,13 @@ function createMockJob(form) {
       memo,
       status: "보이스 준비",
     },
+    voice_script_text: memo || `${partner} ${contentType} 보이스 스크립트를 입력하세요.`,
+    sourceVideoPath: `videos/JOB-260322-${lastIndex}.mp4`,
+    generatedAudioPath: "",
+    finalRenderPath: "",
+    pipelineStatus: "대기",
+    pipelineError: "",
+    subtitleSegments: [],
     subtitles: {
       style: "화이트 베이스 + 소프트 핑크 포인트",
       emphasis: "핵심 메시지 위주 강조",
@@ -861,6 +1005,7 @@ function createMockJob(form) {
     ],
   };
 
+  hydrateJob(newJob);
   mockJobs.unshift(newJob);
   state.selectedJobId = newJob.id;
   state.route = "job-detail";
@@ -903,6 +1048,14 @@ document.addEventListener("click", (event) => {
   if (action === "set-filter") {
     state.statusFilter = target.dataset.filter;
     render();
+    return;
+  }
+
+  if (action === "run-pipeline" || action === "retry-pipeline") {
+    const job = mockJobs.find((item) => item.id === target.dataset.jobId);
+    if (!job) return;
+    runVoicePipeline(job, { retry: action === "retry-pipeline" });
+    render();
   }
 });
 
@@ -921,6 +1074,13 @@ document.addEventListener("input", (event) => {
 
   if (target.form?.id === "job-create-form" && target.name in state.createDraft) {
     state.createDraft[target.name] = target.value;
+    return;
+  }
+
+  if (target.dataset.role === "voice-script-text") {
+    const job = mockJobs.find((item) => item.id === target.dataset.jobId);
+    if (!job) return;
+    job.voice_script_text = target.value;
   }
 });
 
