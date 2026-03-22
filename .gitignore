@@ -1,0 +1,10 @@
+.env
+secrets/
+__pycache__/
+tmp/
+logs/
+done/
+audios/
+videos/
+mp4/
+thumb/
