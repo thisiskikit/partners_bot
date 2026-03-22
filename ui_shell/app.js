@@ -1,6 +1,18 @@
 const DETAIL_TABS = ["개요", "스크립트", "보이스", "자막", "결과물", "로그"];
 
-const mockJobs = [
+const WIZARD_STEPS = [
+  { route: "ticket-link", label: "링크입력" },
+  { route: "ticket-download", label: "다운로드진행" },
+  { route: "ticket-keyword", label: "키워드입력" },
+  { route: "ticket-partners-link", label: "파트너스링크생성" },
+  { route: "ticket-analysis", label: "AI분석초안" },
+  { route: "ticket-script", label: "스크립트생성" },
+  { route: "ticket-voice", label: "보이스생성" },
+  { route: "ticket-subtitle", label: "자막합성" },
+  { route: "ticket-result", label: "최종결과" },
+];
+
+const initialJobs = [
   {
     id: "JOB-260322-01",
     partner: "클린뷰",
@@ -175,356 +187,104 @@ const mockJobs = [
   },
 ];
 
-const initialDraft = () => ({
-  partner: "",
-  contentType: "릴스 광고",
-  channel: "인스타 릴스",
-  tone: "프리미엄 미니멀",
-  dueDate: "2026-03-24",
-  memo: "",
+const SUPPORTED_PLATFORMS = [
+  { key: "youtube", label: "유튜브", hosts: ["youtube.com", "youtu.be"] },
+  { key: "instagram", label: "인스타그램", hosts: ["instagram.com"] },
+  { key: "tiktok", label: "틱톡", hosts: ["tiktok.com"] },
+];
+
+const initialTicketDraft = () => ({
+  sourceLink: "",
+  platform: "",
+  downloadProgress: 0,
+  keywords: "",
+  partnersLink: "",
+  analysisDraft: "",
+  scriptDraft: "",
+  voiceStatus: "",
+  subtitleStatus: "",
+  resultSummary: "",
+  completedAt: "",
 });
 
 const state = {
   route: "login",
   authenticated: false,
   activeTab: "개요",
-  selectedJobId: mockJobs[0].id,
+  selectedJobId: initialJobs[0].id,
   statusFilter: "전체",
   searchQuery: "",
-  createDraft: initialDraft(),
+  jobs: [...initialJobs],
+  ticketDraft: initialTicketDraft(),
+  wizardError: "",
 };
 
 const root = document.querySelector("#app");
 
-function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;",
-  }[char]));
-}
+function escapeHtml(value) { return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char])); }
 
 function badgeTone(label) {
-  if (["진행 중", "높음", "검수 대기", "렌더링 대기", "녹음 예약", "작성 중"].includes(label)) {
-    return "badge-rose";
-  }
-
-  if (["완료", "완료됨", "승인 완료"].includes(label)) {
-    return "badge-ink";
-  }
-
+  if (["진행 중", "높음", "검수 대기", "렌더링 대기", "녹음 예약", "작성 중", "생성 중"].includes(label)) return "badge-rose";
+  if (["완료", "완료됨", "승인 완료", "생성 완료"].includes(label)) return "badge-ink";
   return "badge-soft";
 }
 
-function renderBadge(label) {
-  return `<span class="badge ${badgeTone(label)}">${escapeHtml(label)}</span>`;
-}
+const renderBadge = (label) => `<span class="badge ${badgeTone(label)}">${escapeHtml(label)}</span>`;
 
 function renderTopbar({ title, subtitle, backRoute, rightContent = "" }) {
   const leading = backRoute
     ? `<button class="icon-button" type="button" data-action="navigate" data-route="${backRoute}" aria-label="이전 화면">←</button>`
-    : `<div class="avatar">KP</div>`;
-
-  return `
-    <header class="topbar">
-      <div class="topbar-side">${leading}</div>
-      <div class="topbar-main">
-        <p class="label">${escapeHtml(subtitle)}</p>
-        <h1 class="title-lg">${escapeHtml(title)}</h1>
-      </div>
-      <div class="topbar-side">${rightContent}</div>
-    </header>
-  `;
+    : '<div class="avatar">KP</div>';
+  return `<header class="topbar"><div class="topbar-side">${leading}</div><div class="topbar-main"><p class="label">${escapeHtml(subtitle)}</p><h1 class="title-lg">${escapeHtml(title)}</h1></div><div class="topbar-side">${rightContent}</div></header>`;
 }
 
 function renderSectionHeader(kicker, title, actionLabel = "", actionRoute = "") {
-  const action = actionLabel && actionRoute
-    ? `<button class="ghost-button" type="button" data-action="navigate" data-route="${actionRoute}">${escapeHtml(actionLabel)}</button>`
-    : "";
-
-  return `
-    <div class="section-header">
-      <div class="section-copy">
-        <p class="label">${escapeHtml(kicker)}</p>
-        <h2 class="title-md">${escapeHtml(title)}</h2>
-      </div>
-      ${action}
-    </div>
-  `;
+  const action = actionLabel && actionRoute ? `<button class="ghost-button" type="button" data-action="navigate" data-route="${actionRoute}">${escapeHtml(actionLabel)}</button>` : "";
+  return `<div class="section-header"><div class="section-copy"><p class="label">${escapeHtml(kicker)}</p><h2 class="title-md">${escapeHtml(title)}</h2></div>${action}</div>`;
 }
 
-function renderProgress(value) {
-  return `
-    <div class="progress-bar" aria-hidden="true">
-      <div class="progress-value" style="width: ${Math.max(0, Math.min(100, value))}%"></div>
-    </div>
-  `;
-}
+const renderProgress = (value) => `<div class="progress-bar" aria-hidden="true"><div class="progress-value" style="width: ${Math.max(0, Math.min(100, value))}%"></div></div>`;
+const renderInfoCard = (label, value) => `<div class="info-card"><p class="label">${escapeHtml(label)}</p><span class="info-value">${escapeHtml(value)}</span></div>`;
 
 function renderMenuTile(title, note, route) {
-  return `
-    <button class="menu-tile card-inset" type="button" data-action="navigate" data-route="${route}">
-      <span class="menu-kicker">${escapeHtml(title)}</span>
-      <p class="body-sm">${escapeHtml(note)}</p>
-    </button>
-  `;
+  return `<button class="menu-tile card-inset" type="button" data-action="navigate" data-route="${route}"><span class="menu-kicker">${escapeHtml(title)}</span><p class="body-sm">${escapeHtml(note)}</p></button>`;
 }
 
-function renderInfoCard(label, value) {
-  return `
-    <div class="info-card">
-      <p class="label">${escapeHtml(label)}</p>
-      <span class="info-value">${escapeHtml(value)}</span>
-    </div>
-  `;
+function renderWizardProgress() {
+  const currentIndex = WIZARD_STEPS.findIndex((step) => step.route === state.route);
+  return `<div class="card card-padding stack"><p class="label">생성 위저드</p><div class="pill-row">${WIZARD_STEPS.map((step, index) => `<span class="pill ${index <= currentIndex ? "is-active" : ""}">${index + 1}. ${escapeHtml(step.label)}</span>`).join("")}</div>${state.wizardError ? `<p class="body-sm" style="color:#b42318;">${escapeHtml(state.wizardError)}</p>` : ""}</div>`;
 }
 
 function renderJobCard(job) {
-  return `
-    <button class="card job-card" type="button" data-action="open-job" data-job-id="${job.id}">
-      <div class="job-card-header">
-        <div class="job-card-title">
-          <div class="badge-row">
-            ${renderBadge(job.status)}
-            ${renderBadge(job.channel)}
-          </div>
-          <h3 class="title-md">${escapeHtml(job.title)}</h3>
-          <p class="body-md">${escapeHtml(job.partner)} · ${escapeHtml(job.id)}</p>
-        </div>
-        ${renderBadge(job.priority)}
-      </div>
-      <div class="job-card-title">
-        <div class="meta-row">
-          <span class="helper-note">마감 ${escapeHtml(job.dueLabel)}</span>
-          <span class="helper-note">담당 ${escapeHtml(job.owner)}</span>
-        </div>
-        ${renderProgress(job.progress)}
-        <div class="meta-row">
-          <p class="body-sm">스크립트 ${escapeHtml(job.script.status)}</p>
-          <p class="body-sm">자막 ${escapeHtml(job.subtitles.status)}</p>
-        </div>
-      </div>
-    </button>
-  `;
+  return `<button class="card job-card" type="button" data-action="open-job" data-job-id="${job.id}"><div class="job-card-header"><div class="job-card-title"><div class="badge-row">${renderBadge(job.status)}${renderBadge(job.channel)}</div><h3 class="title-md">${escapeHtml(job.title)}</h3><p class="body-md">${escapeHtml(job.partner)} · ${escapeHtml(job.id)}</p></div>${renderBadge(job.priority)}</div><div class="job-card-title"><div class="meta-row"><span class="helper-note">마감 ${escapeHtml(job.dueLabel)}</span><span class="helper-note">담당 ${escapeHtml(job.owner)}</span></div>${renderProgress(job.progress)}<div class="meta-row"><p class="body-sm">스크립트 ${escapeHtml(job.script.status)}</p><p class="body-sm">자막 ${escapeHtml(job.subtitles.status)}</p></div></div></button>`;
 }
 
 function renderBottomNav() {
   const items = [
     { label: "대시보드", route: "dashboard" },
     { label: "작업 목록", route: "job-list" },
-    { label: "작업 생성", route: "create-job" },
+    { label: "티켓 생성", route: "ticket-link" },
     { label: "상세 보기", route: "job-detail" },
   ];
-
-  return `
-    <div class="bottom-nav-wrap">
-      <nav class="bottom-nav" aria-label="주요 메뉴">
-        ${items.map((item) => `
-          <button
-            type="button"
-            class="${state.route === item.route ? "is-active" : ""}"
-            data-action="navigate"
-            data-route="${item.route}"
-          >
-            ${escapeHtml(item.label)}
-          </button>
-        `).join("")}
-      </nav>
-    </div>
-  `;
+  return `<div class="bottom-nav-wrap"><nav class="bottom-nav" aria-label="주요 메뉴">${items.map((item) => `<button type="button" class="${state.route === item.route ? "is-active" : ""}" data-action="navigate" data-route="${item.route}">${escapeHtml(item.label)}</button>`).join("")}</nav></div>`;
 }
 
-function renderLoginScreen() {
-  return `
-    <main class="screen screen-login">
-      <div class="lockup">
-        <span class="eyebrow">모바일 퍼스트 목업</span>
-        <h1 class="title-xl">키킷 파트너스 스튜디오</h1>
-        <p class="body-lg">한글 메뉴 중심의 프리미엄 미니멀 셸입니다. 프로그램 이제 시작해보자.</p>
-      </div>
-
-      <div class="hero-card card card-padding stack">
-        <div class="badge-row">
-          ${renderBadge("로그인")}
-          ${renderBadge("목업 데이터")}
-        </div>
-        <h2 class="title-lg">시작 전, 팀 공간에 들어가기</h2>
-        <p class="body-md">실제 백엔드는 아직 연결하지 않고, 승인된 모바일 흐름만 먼저 확인할 수 있도록 구성했습니다.</p>
-      </div>
-
-      <form id="login-form" class="card card-padding stack">
-        <label class="input-wrap">
-          <span class="label">이메일</span>
-          <input class="input" type="email" name="email" placeholder="team@kikitpartners.co" value="studio@kikitpartners.co" autocomplete="email">
-        </label>
-        <label class="input-wrap">
-          <span class="label">비밀번호</span>
-          <input class="input" type="password" name="password" placeholder="비밀번호를 입력하세요" value="••••••••" autocomplete="current-password">
-        </label>
-        <div class="pill-row">
-          <span class="helper-note">모바일 최적화</span>
-          <span class="helper-note">화이트 / 소프트 핑크</span>
-        </div>
-        <button class="button button-primary" type="submit">시작하기</button>
-      </form>
-
-      <div class="card card-padding stack">
-        <p class="label">바로 확인할 메뉴</p>
-        <div class="menu-grid">
-          ${renderMenuTile("대시보드", "오늘 진행 상황을 한 번에 확인", "dashboard")}
-          ${renderMenuTile("작업 생성", "새 작업을 빠르게 등록", "create-job")}
-          ${renderMenuTile("작업 목록", "전체 작업 상태를 스캔", "job-list")}
-          ${renderMenuTile("상세 보기", "탭 기반 세부 셸 확인", "job-detail")}
-        </div>
-      </div>
-    </main>
-  `;
-}
+function renderLoginScreen() { return `<main class="screen screen-login"><div class="lockup"><span class="eyebrow">모바일 퍼스트 목업</span><h1 class="title-xl">키킷 파트너스 스튜디오</h1><p class="body-lg">실제 티켓 생성 위저드 구조를 반영한 작업 셸입니다.</p></div><form id="login-form" class="card card-padding stack"><label class="input-wrap"><span class="label">이메일</span><input class="input" type="email" name="email" value="studio@kikitpartners.co"></label><label class="input-wrap"><span class="label">비밀번호</span><input class="input" type="password" name="password" value="••••••••"></label><button class="button button-primary" type="submit">시작하기</button></form><div class="card card-padding stack"><p class="label">바로 확인할 메뉴</p><div class="menu-grid">${renderMenuTile("대시보드", "진행 현황 요약", "dashboard")}${renderMenuTile("티켓 생성", "단계형 생성 위저드", "ticket-link")}${renderMenuTile("작업 목록", "전체 티켓 상태 확인", "job-list")}${renderMenuTile("상세 보기", "완료 티켓 탭 확인", "job-detail")}</div></div></main>`; }
 
 function renderDashboardScreen() {
-  const activeJobs = mockJobs.filter((job) => job.status === "진행 중").length;
-  const reviewJobs = mockJobs.filter((job) => job.script.status === "검수 대기").length;
-  const doneJobs = mockJobs.filter((job) => job.status === "완료").length;
-  const todayJobs = mockJobs.filter((job) => job.dueLabel.includes("오늘")).length;
-
-  return `
-    <main class="screen">
-      ${renderTopbar({
-        title: "대시보드",
-        subtitle: "오늘의 작업 흐름",
-        rightContent: '<span class="helper-note">목업 모드</span>',
-      })}
-
-      <section class="hero-card card card-padding stack">
-        <div class="badge-row">
-          ${renderBadge("운영 허브")}
-          ${renderBadge("모바일 우선")}
-        </div>
-        <h2 class="title-lg">지금 확인해야 할 작업이 또렷하게 보이도록 정리했어요.</h2>
-        <p class="body-md">복잡한 관리자 레이아웃 대신, 손가락 한 번으로 이동할 수 있는 시작 화면에 집중했습니다.</p>
-        <div class="button-row">
-          <button class="button button-primary" type="button" data-action="navigate" data-route="create-job">새 작업 만들기</button>
-          <button class="button button-secondary" type="button" data-action="navigate" data-route="job-list">작업 목록 보기</button>
-        </div>
-      </section>
-
-      <section class="section">
-        ${renderSectionHeader("오늘 요약", "핵심 지표")}
-        <div class="stat-grid">
-          <div class="stat-card"><span class="metric-value">${activeJobs}건</span><p class="body-sm">진행 중 작업</p></div>
-          <div class="stat-card"><span class="metric-value">${todayJobs}건</span><p class="body-sm">오늘 마감</p></div>
-          <div class="stat-card"><span class="metric-value">${reviewJobs}건</span><p class="body-sm">검수 대기</p></div>
-          <div class="stat-card"><span class="metric-value">${doneJobs}건</span><p class="body-sm">완료 작업</p></div>
-        </div>
-      </section>
-
-      <section class="section">
-        ${renderSectionHeader("빠른 메뉴", "바로 가기")}
-        <div class="menu-grid">
-          ${renderMenuTile("작업 생성", "요청 내용을 입력하고 셸 생성", "create-job")}
-          ${renderMenuTile("작업 목록", "상태별로 빠르게 스캔", "job-list")}
-          ${renderMenuTile("상세 보기", "탭 UI와 로그 흐름 확인", "job-detail")}
-          ${renderMenuTile("로그인 화면", "처음 시작 화면 다시 보기", "login")}
-        </div>
-      </section>
-
-      <section class="section">
-        ${renderSectionHeader("최근 작업", "우선 확인 2건", "전체 보기", "job-list")}
-        <div class="job-list">
-          ${mockJobs.slice(0, 2).map(renderJobCard).join("")}
-        </div>
-      </section>
-    </main>
-  `;
-}
-
-function renderCreateScreen() {
-  return `
-    <main class="screen">
-      ${renderTopbar({
-        title: "작업 생성",
-        subtitle: "새 작업 등록",
-        backRoute: "dashboard",
-        rightContent: renderBadge("목업 저장"),
-      })}
-
-      <section class="hero-card card card-padding stack">
-        <div class="badge-row">
-          ${renderBadge("한글 폼")}
-          ${renderBadge("모바일 입력 최적화")}
-        </div>
-        <h2 class="title-lg">필수 정보만 간결하게 입력하고 바로 작업을 시작합니다.</h2>
-        <p class="body-md">실제 저장은 하지 않고, 입력값을 기준으로 새로운 목업 작업 카드를 만들어 상세 화면으로 이동합니다.</p>
-      </section>
-
-      <form id="job-create-form" class="section">
-        <div class="card card-padding form-grid">
-          <label class="input-wrap">
-            <span class="label">파트너명</span>
-            <input class="input" type="text" name="partner" value="${escapeHtml(state.createDraft.partner)}" placeholder="예: 클린뷰">
-          </label>
-
-          <label class="input-wrap">
-            <span class="label">콘텐츠 유형</span>
-            <select class="select" name="contentType">
-              ${["릴스 광고", "제품 티저", "리마인드 영상", "후기 숏폼"].map((option) => `
-                <option value="${option}" ${state.createDraft.contentType === option ? "selected" : ""}>${option}</option>
-              `).join("")}
-            </select>
-          </label>
-
-          <label class="input-wrap">
-            <span class="label">게시 채널</span>
-            <select class="select" name="channel">
-              ${["인스타 릴스", "틱톡", "유튜브 쇼츠"].map((option) => `
-                <option value="${option}" ${state.createDraft.channel === option ? "selected" : ""}>${option}</option>
-              `).join("")}
-            </select>
-          </label>
-
-          <label class="input-wrap">
-            <span class="label">보이스 톤</span>
-            <select class="select" name="tone">
-              ${["프리미엄 미니멀", "따뜻한 설득형", "빠르고 선명한 톤", "세련된 무드형"].map((option) => `
-                <option value="${option}" ${state.createDraft.tone === option ? "selected" : ""}>${option}</option>
-              `).join("")}
-            </select>
-          </label>
-
-          <label class="input-wrap">
-            <span class="label">마감일</span>
-            <input class="input" type="date" name="dueDate" value="${escapeHtml(state.createDraft.dueDate)}">
-          </label>
-
-          <label class="input-wrap">
-            <span class="label">요청 메모</span>
-            <textarea class="textarea" name="memo" placeholder="핵심 메시지, 레퍼런스, 꼭 지켜야 할 포인트를 적어주세요.">${escapeHtml(state.createDraft.memo)}</textarea>
-          </label>
-        </div>
-
-        <div class="card detail-card sticky-bar">
-          <div class="badge-row">
-            ${renderBadge("목업 데이터로 생성")}
-            ${renderBadge("백엔드 미연동")}
-          </div>
-          <p class="body-md">저장 버튼을 누르면 입력값 기반의 새 작업 카드가 생성되고 바로 상세 탭 셸로 이동합니다.</p>
-          <button class="button button-primary" type="submit">작업 생성하기</button>
-        </div>
-      </form>
-    </main>
-  `;
+  const jobs = state.jobs;
+  const activeJobs = jobs.filter((job) => job.status === "진행 중").length;
+  const reviewJobs = jobs.filter((job) => job.script.status === "검수 대기").length;
+  const doneJobs = jobs.filter((job) => job.status === "완료").length;
+  const todayJobs = jobs.filter((job) => job.dueLabel.includes("오늘")).length;
+  return `<main class="screen">${renderTopbar({ title: "대시보드", subtitle: "오늘의 작업 흐름", rightContent: '<span class="helper-note">실제 워크플로우</span>' })}<section class="hero-card card card-padding stack"><h2 class="title-lg">티켓 생성은 단계형 위저드에서 진행하고 완료 후 상세 탭에서 확인합니다.</h2><div class="button-row"><button class="button button-primary" type="button" data-action="navigate" data-route="ticket-link">새 티켓 만들기</button><button class="button button-secondary" type="button" data-action="navigate" data-route="job-list">작업 목록 보기</button></div></section><section class="section">${renderSectionHeader("오늘 요약", "핵심 지표")}<div class="stat-grid"><div class="stat-card"><span class="metric-value">${activeJobs}건</span><p class="body-sm">진행 중 작업</p></div><div class="stat-card"><span class="metric-value">${todayJobs}건</span><p class="body-sm">오늘 마감</p></div><div class="stat-card"><span class="metric-value">${reviewJobs}건</span><p class="body-sm">검수 대기</p></div><div class="stat-card"><span class="metric-value">${doneJobs}건</span><p class="body-sm">완료 작업</p></div></div></section></main>`;
 }
 
 function getFilteredJobs() {
-  return mockJobs.filter((job) => {
-    const matchesFilter = state.statusFilter === "전체"
-      || job.status === state.statusFilter
-      || job.script.status === state.statusFilter;
+  return state.jobs.filter((job) => {
+    const matchesFilter = state.statusFilter === "전체" || job.status === state.statusFilter || job.script.status === state.statusFilter;
     const haystack = `${job.title} ${job.partner} ${job.channel}`.toLowerCase();
     const matchesSearch = !state.searchQuery || haystack.includes(state.searchQuery.trim().toLowerCase());
-
     return matchesFilter && matchesSearch;
   });
 }
@@ -532,416 +292,251 @@ function getFilteredJobs() {
 function renderJobListScreen() {
   const filters = ["전체", "진행 중", "검수 대기", "완료"];
   const filteredJobs = getFilteredJobs();
-
-  return `
-    <main class="screen">
-      ${renderTopbar({
-        title: "작업 목록",
-        subtitle: `전체 ${mockJobs.length}건`,
-        backRoute: "dashboard",
-        rightContent: '<span class="helper-note">필터 가능</span>',
-      })}
-
-      <section class="stack">
-        <div class="search-wrap">
-          <input
-            class="search-input"
-            type="search"
-            data-role="job-search"
-            placeholder="작업명, 파트너명, 채널 검색"
-            value="${escapeHtml(state.searchQuery)}"
-          >
-        </div>
-
-        <div class="pill-row" aria-label="상태 필터">
-          ${filters.map((filter) => `
-            <button class="pill ${state.statusFilter === filter ? "is-active" : ""}" type="button" data-action="set-filter" data-filter="${filter}">
-              ${escapeHtml(filter)}
-            </button>
-          `).join("")}
-        </div>
-      </section>
-
-      <section class="section">
-        ${renderSectionHeader("작업 카드", "모바일 스캔 리스트", "새 작업", "create-job")}
-        <div class="job-list">
-          ${filteredJobs.length
-            ? filteredJobs.map(renderJobCard).join("")
-            : `
-              <div class="card card-padding stack">
-                <h3 class="title-md">조건에 맞는 작업이 없습니다.</h3>
-                <p class="body-md">검색어나 상태 필터를 조정해 보세요.</p>
-              </div>
-            `}
-        </div>
-      </section>
-    </main>
-  `;
+  return `<main class="screen">${renderTopbar({ title: "작업 목록", subtitle: `전체 ${state.jobs.length}건`, backRoute: "dashboard", rightContent: '<span class="helper-note">필터 가능</span>' })}<section class="stack"><div class="search-wrap"><input class="search-input" type="search" data-role="job-search" placeholder="작업명, 파트너명, 채널 검색" value="${escapeHtml(state.searchQuery)}"></div><div class="pill-row" aria-label="상태 필터">${filters.map((filter) => `<button class="pill ${state.statusFilter === filter ? "is-active" : ""}" type="button" data-action="set-filter" data-filter="${filter}">${escapeHtml(filter)}</button>`).join("")}</div></section><section class="section">${renderSectionHeader("작업 카드", "모바일 스캔 리스트", "새 티켓", "ticket-link")}<div class="job-list">${filteredJobs.length ? filteredJobs.map(renderJobCard).join("") : `<div class="card card-padding stack"><h3 class="title-md">조건에 맞는 작업이 없습니다.</h3><p class="body-md">검색어나 상태 필터를 조정해 보세요.</p></div>`}</div></section></main>`;
 }
 
-function getSelectedJob() {
-  return mockJobs.find((job) => job.id === state.selectedJobId) || mockJobs[0];
+function detectPlatform(link) {
+  try {
+    const host = new URL(link).hostname.replace("www.", "");
+    return SUPPORTED_PLATFORMS.find((platform) => platform.hosts.some((supportedHost) => host.includes(supportedHost))) || null;
+  } catch {
+    return null;
+  }
 }
 
-function renderOverviewTab(job) {
-  return `
-    <div class="stack">
-      <div class="card detail-card">
-        <div class="badge-row">
-          ${renderBadge(job.status)}
-          ${renderBadge(job.channel)}
-          ${renderBadge(job.script.status)}
-        </div>
-        <p class="body-md">${escapeHtml(job.overview.summary)}</p>
-        <div class="info-grid">
-          ${renderInfoCard("파트너", job.partner)}
-          ${renderInfoCard("담당 팀", job.owner)}
-          ${renderInfoCard("마감", job.dueLabel)}
-          ${renderInfoCard("생성일", job.createdAt)}
-        </div>
-      </div>
-
-      <div class="card detail-card">
-        <h3 class="title-md">핵심 목표</h3>
-        <p class="body-md">${escapeHtml(job.overview.goal)}</p>
-        <ul class="bullet-list">
-          ${job.overview.notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("")}
-        </ul>
-      </div>
-    </div>
-  `;
+function renderLinkStep() {
+  return `<section class="section stack">${renderWizardProgress()}<form id="ticket-link-form" class="card card-padding stack"><h2 class="title-lg">1) 링크 입력</h2><label class="input-wrap"><span class="label">원본 콘텐츠 링크</span><input class="input" type="url" name="sourceLink" placeholder="https://..." value="${escapeHtml(state.ticketDraft.sourceLink)}"></label><p class="helper-note">지원 플랫폼: 유튜브 / 인스타그램 / 틱톡</p><button class="button button-primary" type="submit">다운로드 단계로 이동</button></form></section>`;
+}
+function renderDownloadStep() {
+  return `<section class="section stack">${renderWizardProgress()}<div class="card card-padding stack"><h2 class="title-lg">2) 다운로드 진행</h2><p class="body-md">플랫폼: ${renderBadge(state.ticketDraft.platform || "미확인")}</p>${renderProgress(state.ticketDraft.downloadProgress)}<p class="body-sm">현재 진행률 ${state.ticketDraft.downloadProgress}%</p><div class="button-row"><button class="button button-secondary" type="button" data-action="download-progress">진행률 +25%</button><button class="button button-primary" type="button" data-action="goto-step" data-route="ticket-keyword">키워드 입력 단계</button></div></div></section>`;
+}
+function renderKeywordStep() {
+  return `<section class="section stack">${renderWizardProgress()}<form id="ticket-keyword-form" class="card card-padding stack"><h2 class="title-lg">3) 키워드 입력</h2><label class="input-wrap"><span class="label">핵심 키워드</span><input class="input" type="text" name="keywords" placeholder="예: 봄케어, 보습, 한정혜택" value="${escapeHtml(state.ticketDraft.keywords)}"></label><button class="button button-primary" type="submit">파트너스 링크 생성</button></form></section>`;
+}
+function renderPartnersLinkStep() {
+  return `<section class="section stack">${renderWizardProgress()}<div class="card card-padding stack"><h2 class="title-lg">4) 파트너스 링크 생성</h2><p class="body-md">생성 링크: ${escapeHtml(state.ticketDraft.partnersLink || "아직 생성 전")}</p><button class="button button-primary" type="button" data-action="generate-partners-link">AI 분석 초안으로 이동</button></div></section>`;
+}
+function renderAnalysisStep() {
+  return `<section class="section stack">${renderWizardProgress()}<div class="card card-padding stack"><h2 class="title-lg">5) AI 분석 초안</h2><p class="body-md">${escapeHtml(state.ticketDraft.analysisDraft || "분석 초안을 생성해 주세요.")}</p><button class="button button-primary" type="button" data-action="generate-analysis">스크립트 생성으로 이동</button></div></section>`;
+}
+function renderScriptStep() {
+  return `<section class="section stack">${renderWizardProgress()}<div class="card card-padding stack"><h2 class="title-lg">6) 스크립트 생성</h2><div class="quote"><p class="body-md">${escapeHtml(state.ticketDraft.scriptDraft || "스크립트를 생성해 주세요.")}</p></div><button class="button button-primary" type="button" data-action="generate-script">보이스 생성으로 이동</button></div></section>`;
+}
+function renderVoiceStep() {
+  return `<section class="section stack">${renderWizardProgress()}<div class="card card-padding stack"><h2 class="title-lg">7) 보이스 생성</h2><p class="body-md">상태: ${escapeHtml(state.ticketDraft.voiceStatus || "대기")}</p><button class="button button-primary" type="button" data-action="generate-voice">자막 합성으로 이동</button></div></section>`;
+}
+function renderSubtitleStep() {
+  return `<section class="section stack">${renderWizardProgress()}<div class="card card-padding stack"><h2 class="title-lg">8) 자막 합성</h2><p class="body-md">상태: ${escapeHtml(state.ticketDraft.subtitleStatus || "대기")}</p><button class="button button-primary" type="button" data-action="generate-subtitle">최종 결과로 이동</button></div></section>`;
+}
+function renderResultStep() {
+  return `<section class="section stack">${renderWizardProgress()}<div class="card card-padding stack"><h2 class="title-lg">9) 최종 결과</h2><p class="body-md">${escapeHtml(state.ticketDraft.resultSummary || "결과 요약 생성 전")}</p><button class="button button-primary" type="button" data-action="complete-ticket">완료 티켓 생성</button></div></section>`;
 }
 
-function renderScriptTab(job) {
-  return `
-    <div class="stack">
-      <div class="card script-block">
-        <div class="badge-row">
-          ${renderBadge(job.script.status)}
-          ${renderBadge("스크립트 셸")}
-        </div>
-        <h3 class="title-md">${escapeHtml(job.script.headline)}</h3>
-        <div class="quote">
-          ${job.script.body.map((line) => `<p class="body-md">${escapeHtml(line)}</p>`).join("")}
-        </div>
-      </div>
-
-      <div class="card detail-card">
-        <h3 class="title-md">콜 투 액션</h3>
-        <p class="body-md">${escapeHtml(job.script.cta)}</p>
-      </div>
-    </div>
-  `;
-}
-
-function renderVoiceTab(job) {
-  return `
-    <div class="card detail-card">
-      <div class="badge-row">
-        ${renderBadge(job.voice.status)}
-        ${renderBadge(job.voice.talent)}
-      </div>
-      <div class="info-grid">
-        ${renderInfoCard("톤", job.voice.mood)}
-        ${renderInfoCard("속도", job.voice.speed)}
-        ${renderInfoCard("피치", job.voice.pitch)}
-        ${renderInfoCard("메모", job.voice.memo)}
-      </div>
-    </div>
-  `;
-}
-
-function renderSubtitleTab(job) {
-  return `
-    <div class="card detail-card">
-      <div class="badge-row">
-        ${renderBadge(job.subtitles.status)}
-        ${renderBadge("자막 스타일")}
-      </div>
-      <p class="body-md">스타일: ${escapeHtml(job.subtitles.style)}</p>
-      <p class="body-md">강조 규칙: ${escapeHtml(job.subtitles.emphasis)}</p>
-      <div class="stack">
-        ${job.subtitles.sample.map((line) => `<div class="quote">${escapeHtml(line)}</div>`).join("")}
-      </div>
-    </div>
-  `;
-}
-
-function renderDeliverablesTab(job) {
-  return `
-    <div class="result-grid">
-      ${job.deliverables.map((item) => `
-        <div class="card result-card">
-          <div class="badge-row">${renderBadge(item.status)}</div>
-          <h3 class="title-md">${escapeHtml(item.label)}</h3>
-          <p class="body-md">${escapeHtml(item.note)}</p>
-        </div>
-      `).join("")}
-    </div>
-  `;
-}
-
-function renderLogTab(job) {
-  return `
-    <div class="card detail-card">
-      <div class="timeline">
-        ${job.logs.map((log) => `
-          <div class="timeline-item">
-            <div class="badge-row">${renderBadge(log.time)}</div>
-            <h3 class="title-md">${escapeHtml(log.title)}</h3>
-            <p class="body-md">${escapeHtml(log.detail)}</p>
-          </div>
-        `).join("")}
-      </div>
-    </div>
-  `;
-}
-
-function renderDetailTab(job) {
-  const renderers = {
-    개요: renderOverviewTab,
-    스크립트: renderScriptTab,
-    보이스: renderVoiceTab,
-    자막: renderSubtitleTab,
-    결과물: renderDeliverablesTab,
-    로그: renderLogTab,
+function renderWizardScreen() {
+  const titles = Object.fromEntries(WIZARD_STEPS.map((s) => [s.route, s.label]));
+  const stepRenderers = {
+    "ticket-link": renderLinkStep,
+    "ticket-download": renderDownloadStep,
+    "ticket-keyword": renderKeywordStep,
+    "ticket-partners-link": renderPartnersLinkStep,
+    "ticket-analysis": renderAnalysisStep,
+    "ticket-script": renderScriptStep,
+    "ticket-voice": renderVoiceStep,
+    "ticket-subtitle": renderSubtitleStep,
+    "ticket-result": renderResultStep,
   };
-
-  return renderers[state.activeTab](job);
+  return `<main class="screen">${renderTopbar({ title: "티켓 생성", subtitle: titles[state.route], backRoute: "dashboard", rightContent: renderBadge("위저드") })}${stepRenderers[state.route]()}</main>`;
 }
+
+function getSelectedJob() { return state.jobs.find((job) => job.id === state.selectedJobId) || state.jobs[0]; }
+function renderOverviewTab(job) { return `<div class="stack"><div class="card detail-card"><div class="badge-row">${renderBadge(job.status)}${renderBadge(job.channel)}${renderBadge(job.script.status)}</div><p class="body-md">${escapeHtml(job.overview.summary)}</p><div class="info-grid">${renderInfoCard("파트너", job.partner)}${renderInfoCard("담당 팀", job.owner)}${renderInfoCard("마감", job.dueLabel)}${renderInfoCard("생성일", job.createdAt)}</div></div><div class="card detail-card"><h3 class="title-md">핵심 목표</h3><p class="body-md">${escapeHtml(job.overview.goal)}</p><ul class="bullet-list">${job.overview.notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("")}</ul></div></div>`; }
+function renderScriptTab(job) { return `<div class="stack"><div class="card script-block"><div class="badge-row">${renderBadge(job.script.status)}${renderBadge("스크립트")}</div><h3 class="title-md">${escapeHtml(job.script.headline)}</h3><div class="quote">${job.script.body.map((line) => `<p class="body-md">${escapeHtml(line)}</p>`).join("")}</div></div><div class="card detail-card"><h3 class="title-md">콜 투 액션</h3><p class="body-md">${escapeHtml(job.script.cta)}</p></div></div>`; }
+function renderVoiceTab(job) { return `<div class="card detail-card"><div class="badge-row">${renderBadge(job.voice.status)}${renderBadge(job.voice.talent)}</div><div class="info-grid">${renderInfoCard("톤", job.voice.mood)}${renderInfoCard("속도", job.voice.speed)}${renderInfoCard("피치", job.voice.pitch)}${renderInfoCard("메모", job.voice.memo)}</div></div>`; }
+function renderSubtitleTab(job) { return `<div class="card detail-card"><div class="badge-row">${renderBadge(job.subtitles.status)}${renderBadge("자막 스타일")}</div><p class="body-md">스타일: ${escapeHtml(job.subtitles.style)}</p><p class="body-md">강조 규칙: ${escapeHtml(job.subtitles.emphasis)}</p><div class="stack">${job.subtitles.sample.map((line) => `<div class="quote">${escapeHtml(line)}</div>`).join("")}</div></div>`; }
+function renderDeliverablesTab(job) { return `<div class="result-grid">${job.deliverables.map((item) => `<div class="card result-card"><div class="badge-row">${renderBadge(item.status)}</div><h3 class="title-md">${escapeHtml(item.label)}</h3><p class="body-md">${escapeHtml(item.note)}</p></div>`).join("")}</div>`; }
+function renderLogTab(job) { return `<div class="card detail-card"><div class="timeline">${job.logs.map((log) => `<div class="timeline-item"><div class="badge-row">${renderBadge(log.time)}</div><h3 class="title-md">${escapeHtml(log.title)}</h3><p class="body-md">${escapeHtml(log.detail)}</p></div>`).join("")}</div></div>`; }
+function renderDetailTab(job) { return ({ 개요: renderOverviewTab, 스크립트: renderScriptTab, 보이스: renderVoiceTab, 자막: renderSubtitleTab, 결과물: renderDeliverablesTab, 로그: renderLogTab }[state.activeTab])(job); }
 
 function renderJobDetailScreen() {
   const job = getSelectedJob();
-
-  return `
-    <main class="screen">
-      ${renderTopbar({
-        title: "작업 상세",
-        subtitle: job.id,
-        backRoute: "job-list",
-        rightContent: renderBadge("탭 셸"),
-      })}
-
-      <section class="hero-card card card-padding stack">
-        <div class="badge-row">${job.tags.map(renderBadge).join("")}</div>
-        <h2 class="title-lg">${escapeHtml(job.title)}</h2>
-        <p class="body-md">${escapeHtml(job.partner)} · ${escapeHtml(job.channel)} · 마감 ${escapeHtml(job.dueLabel)}</p>
-        ${renderProgress(job.progress)}
-        <div class="meta-row">
-          <span class="helper-note">진행률 ${job.progress}%</span>
-          <span class="helper-note">${escapeHtml(job.voice.status)}</span>
-          <span class="helper-note">${escapeHtml(job.subtitles.status)}</span>
-        </div>
-      </section>
-
-      <section class="section">
-        <div class="tab-row" aria-label="상세 탭">
-          ${DETAIL_TABS.map((tab) => `
-            <button class="pill ${state.activeTab === tab ? "is-active" : ""}" type="button" data-action="set-tab" data-tab="${tab}">
-              ${escapeHtml(tab)}
-            </button>
-          `).join("")}
-        </div>
-        ${renderDetailTab(job)}
-      </section>
-    </main>
-  `;
+  if (!job || job.status !== "완료") {
+    return `<main class="screen">${renderTopbar({ title: "작업 상세", subtitle: "완료 티켓 전용", backRoute: "job-list", rightContent: renderBadge("읽기 전용") })}<section class="section"><div class="card card-padding stack"><h2 class="title-lg">상세 탭은 생성 완료 티켓만 확인할 수 있습니다.</h2><p class="body-md">생성 중인 티켓은 단계형 위저드에서 계속 진행해 주세요.</p><button class="button button-primary" type="button" data-action="navigate" data-route="ticket-link">위저드로 이동</button></div></section></main>`;
+  }
+  return `<main class="screen">${renderTopbar({ title: "작업 상세", subtitle: job.id, backRoute: "job-list", rightContent: renderBadge("완료 티켓") })}<section class="hero-card card card-padding stack"><div class="badge-row">${job.tags.map(renderBadge).join("")}</div><h2 class="title-lg">${escapeHtml(job.title)}</h2><p class="body-md">${escapeHtml(job.partner)} · ${escapeHtml(job.channel)} · 마감 ${escapeHtml(job.dueLabel)}</p>${renderProgress(job.progress)}</section><section class="section"><div class="tab-row" aria-label="상세 탭">${DETAIL_TABS.map((tab) => `<button class="pill ${state.activeTab === tab ? "is-active" : ""}" type="button" data-action="set-tab" data-tab="${tab}">${escapeHtml(tab)}</button>`).join("")}</div>${renderDetailTab(job)}</section></main>`;
 }
 
 function renderScreen() {
-  if (!state.authenticated && state.route !== "login") {
-    state.route = "login";
-  }
-
+  if (!state.authenticated && state.route !== "login") state.route = "login";
   switch (state.route) {
-    case "dashboard":
-      return renderDashboardScreen();
-    case "create-job":
-      return renderCreateScreen();
-    case "job-list":
-      return renderJobListScreen();
-    case "job-detail":
-      return renderJobDetailScreen();
+    case "dashboard": return renderDashboardScreen();
+    case "job-list": return renderJobListScreen();
+    case "job-detail": return renderJobDetailScreen();
+    case "ticket-link":
+    case "ticket-download":
+    case "ticket-keyword":
+    case "ticket-partners-link":
+    case "ticket-analysis":
+    case "ticket-script":
+    case "ticket-voice":
+    case "ticket-subtitle":
+    case "ticket-result":
+      return renderWizardScreen();
     case "login":
-    default:
-      return renderLoginScreen();
+    default: return renderLoginScreen();
   }
 }
 
-function render() {
-  root.innerHTML = `
-    <div class="app-stage">
-      <div class="phone-shell">
-        ${renderScreen()}
-        ${state.authenticated ? renderBottomNav() : ""}
-      </div>
-    </div>
-  `;
-}
+function render() { root.innerHTML = `<div class="app-stage"><div class="phone-shell">${renderScreen()}${state.authenticated ? renderBottomNav() : ""}</div></div>`; }
 
 function navigate(route) {
-  if (route === "login") {
-    state.authenticated = false;
-  } else if (!state.authenticated) {
-    state.authenticated = true;
-  }
-
-  if (route !== "job-detail") {
-    state.activeTab = "개요";
-  }
-
+  if (route === "login") state.authenticated = false;
+  else if (!state.authenticated) state.authenticated = true;
+  if (route !== "job-detail") state.activeTab = "개요";
+  state.wizardError = "";
   state.route = route;
   render();
 }
 
-function createMockJob(form) {
-  const partner = form.get("partner")?.toString().trim() || "새 파트너";
-  const contentType = form.get("contentType")?.toString().trim() || "릴스 광고";
-  const channel = form.get("channel")?.toString().trim() || "인스타 릴스";
-  const tone = form.get("tone")?.toString().trim() || "프리미엄 미니멀";
-  const dueDate = form.get("dueDate")?.toString().trim() || "2026-03-24";
-  const memo = form.get("memo")?.toString().trim() || "핵심 메시지를 아직 입력하지 않았습니다.";
-  const lastIndex = String(mockJobs.length + 1).padStart(2, "0");
+function validateLinkStep(form) {
+  const sourceLink = form.get("sourceLink")?.toString().trim() || "";
+  if (!sourceLink) return { ok: false, message: "링크를 입력해 주세요." };
+  const platform = detectPlatform(sourceLink);
+  if (!platform) return { ok: false, message: "지원되지 않는 플랫폼 링크입니다. (유튜브/인스타그램/틱톡만 지원)" };
+  return { ok: true, sourceLink, platform: platform.label };
+}
 
-  const newJob = {
-    id: `JOB-260322-${lastIndex}`,
-    partner,
-    title: `${partner} ${contentType}`,
-    status: "진행 중",
-    progress: 16,
-    dueLabel: dueDate.replaceAll("-", "."),
-    channel,
-    createdAt: "2026.03.22",
-    owner: "운영 신작업",
-    priority: "높음",
-    tags: ["신규 생성", tone],
+function validateKeywordStep(form) {
+  const keywords = form.get("keywords")?.toString().trim() || "";
+  if (!keywords) return { ok: false, message: "키워드를 1개 이상 입력해 주세요." };
+  return { ok: true, keywords };
+}
+
+function completeTicketFromDraft() {
+  const idx = String(state.jobs.length + 1).padStart(2, "0");
+  const keywordList = state.ticketDraft.keywords.split(",").map((v) => v.trim()).filter(Boolean);
+  const today = "2026.03.22";
+  const job = {
+    id: `JOB-260322-${idx}`,
+    partner: "신규 파트너",
+    title: `${state.ticketDraft.platform} 소스 기반 자동 생성 티켓`,
+    status: "완료",
+    progress: 100,
+    dueLabel: "완료됨",
+    channel: state.ticketDraft.platform,
+    createdAt: today,
+    owner: "워크플로우 봇",
+    priority: "중간",
+    tags: ["생성 완료", ...keywordList.slice(0, 2)],
     overview: {
-      summary: `${partner}용 ${contentType} 작업이 새로 시작되었습니다.`,
-      goal: memo,
-      notes: [
-        "실제 저장 없이 셸 화면만 우선 구성됨",
-        "다음 단계에서 백엔드 필드 매핑 가능",
-        "모바일 기준 편집 흐름으로 이어질 수 있음",
-      ],
+      summary: state.ticketDraft.resultSummary,
+      goal: state.ticketDraft.analysisDraft,
+      notes: ["링크 기반 자동 흐름 완료", "검증 규칙 통과", "완료 탭 전용으로 이동"],
     },
-    script: {
-      headline: `${partner}의 핵심 메시지를 담은 첫 스크립트 셸`,
-      body: [
-        "첫 장면에서 바로 관심을 끌 수 있는 후킹 문장을 배치합니다.",
-        `${tone} 톤을 기준으로 전체 카피와 리듬을 맞춥니다.`,
-        "최종 CTA는 실제 연결 전까지 목업 문구로 유지합니다.",
-      ],
-      cta: "지금 상세 검토로 넘어가기",
-      status: "검수 대기",
-    },
-    voice: {
-      talent: "기본 보이스",
-      mood: tone,
-      speed: "1.00x",
-      pitch: "0",
-      memo,
-      status: "보이스 준비",
-    },
-    subtitles: {
-      style: "화이트 베이스 + 소프트 핑크 포인트",
-      emphasis: "핵심 메시지 위주 강조",
-      sample: [
-        `${partner} 작업이 방금 생성되었습니다.`,
-        "다음 단계에서 스크립트와 자막을 구체화할 수 있습니다.",
-      ],
-      status: "초안",
-    },
+    script: { headline: "AI 생성 스크립트", body: [state.ticketDraft.scriptDraft], cta: state.ticketDraft.partnersLink, status: "승인 완료" },
+    voice: { talent: "AI Voice", mood: "안정형", speed: "1.00x", pitch: "0", memo: state.ticketDraft.voiceStatus, status: "완료" },
+    subtitles: { style: "자동 자막 스타일", emphasis: "핵심 키워드 중심", sample: keywordList.map((k) => `${k} 강조 자막`), status: "완료" },
     deliverables: [
-      { label: "세로형 MP4", note: "목업 결과물 준비 전", status: "대기" },
-      { label: "썸네일", note: "대표 컷 미정", status: "대기" },
+      { label: "최종 MP4", note: "자동 파이프라인 완료", status: "완료" },
+      { label: "파트너스 링크", note: state.ticketDraft.partnersLink, status: "완료" },
     ],
     logs: [
-      { time: "지금", title: "새 작업 생성", detail: `${partner} ${contentType} 작업이 목업으로 추가되었습니다.` },
-      { time: "다음", title: "세부 탭 준비", detail: "스크립트, 보이스, 자막, 결과물 탭 셸을 바로 확인할 수 있습니다." },
+      { time: "방금", title: "워크플로우 완료", detail: "단계형 생성 위저드를 모두 통과했습니다." },
+      { time: "방금", title: "상세 탭 전환", detail: "생성 완료 티켓 보기로 이동합니다." },
     ],
   };
-
-  mockJobs.unshift(newJob);
-  state.selectedJobId = newJob.id;
+  state.jobs.unshift(job);
+  state.selectedJobId = job.id;
+  state.ticketDraft = initialTicketDraft();
   state.route = "job-detail";
   state.activeTab = "개요";
-  state.searchQuery = "";
-  state.statusFilter = "전체";
-  state.createDraft = initialDraft();
-  render();
 }
 
 document.addEventListener("click", (event) => {
   const target = event.target.closest("[data-action]");
+  if (!target) return;
+  const { action } = target.dataset;
 
-  if (!target) {
+  if (action === "navigate") { navigate(target.dataset.route); return; }
+  if (action === "open-job") { state.selectedJobId = target.dataset.jobId; state.route = "job-detail"; state.activeTab = "개요"; state.authenticated = true; render(); return; }
+  if (action === "set-tab") { state.activeTab = target.dataset.tab; render(); return; }
+  if (action === "set-filter") { state.statusFilter = target.dataset.filter; render(); return; }
+
+  if (action === "download-progress") {
+    state.ticketDraft.downloadProgress = Math.min(100, state.ticketDraft.downloadProgress + 25);
+    state.wizardError = "";
+    render();
     return;
   }
 
-  const { action } = target.dataset;
-
-  if (action === "navigate") {
+  if (action === "goto-step") {
+    if (target.dataset.route === "ticket-keyword" && state.ticketDraft.downloadProgress < 100) {
+      state.wizardError = "다운로드가 완료되어야 다음 단계로 이동할 수 있습니다.";
+      render();
+      return;
+    }
     navigate(target.dataset.route);
     return;
   }
 
-  if (action === "open-job") {
-    state.selectedJobId = target.dataset.jobId;
-    state.route = "job-detail";
-    state.activeTab = "개요";
-    state.authenticated = true;
-    render();
+  if (action === "generate-partners-link") {
+    state.ticketDraft.partnersLink = `https://partners.kikit.co/r/${Date.now().toString().slice(-6)}`;
+    navigate("ticket-analysis");
     return;
   }
-
-  if (action === "set-tab") {
-    state.activeTab = target.dataset.tab;
-    render();
+  if (action === "generate-analysis") {
+    state.ticketDraft.analysisDraft = `${state.ticketDraft.platform} 원본을 분석한 결과, ${state.ticketDraft.keywords} 키워드 중심의 후킹 구성이 적합합니다.`;
+    navigate("ticket-script");
     return;
   }
-
-  if (action === "set-filter") {
-    state.statusFilter = target.dataset.filter;
+  if (action === "generate-script") {
+    state.ticketDraft.scriptDraft = `첫 3초에 ${state.ticketDraft.keywords.split(",")[0]?.trim() || "핵심 메시지"}를 강조하고, 후반부에서 파트너스 링크 클릭을 유도합니다.`;
+    navigate("ticket-voice");
+    return;
+  }
+  if (action === "generate-voice") {
+    state.ticketDraft.voiceStatus = "보이스 합성 완료 (여성 톤, 1.0x)";
+    navigate("ticket-subtitle");
+    return;
+  }
+  if (action === "generate-subtitle") {
+    state.ticketDraft.subtitleStatus = "자막 합성 완료 (자동 줄바꿈 적용)";
+    state.ticketDraft.resultSummary = "최종 결과물 준비가 완료되었습니다. 상세 탭에서 결과를 확인할 수 있습니다.";
+    navigate("ticket-result");
+    return;
+  }
+  if (action === "complete-ticket") {
+    completeTicketFromDraft();
     render();
   }
 });
 
 document.addEventListener("input", (event) => {
   const target = event.target;
-
-  if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement)) {
-    return;
-  }
-
-  if (target.dataset.role === "job-search") {
-    state.searchQuery = target.value;
-    render();
-    return;
-  }
-
-  if (target.form?.id === "job-create-form" && target.name in state.createDraft) {
-    state.createDraft[target.name] = target.value;
-  }
+  if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement)) return;
+  if (target.dataset.role === "job-search") { state.searchQuery = target.value; render(); }
 });
 
 document.addEventListener("submit", (event) => {
   const form = event.target;
-
-  if (!(form instanceof HTMLFormElement)) {
-    return;
-  }
-
+  if (!(form instanceof HTMLFormElement)) return;
   event.preventDefault();
 
-  if (form.id === "login-form") {
-    state.authenticated = true;
-    state.route = "dashboard";
-    render();
+  if (form.id === "login-form") { state.authenticated = true; state.route = "dashboard"; render(); return; }
+
+  if (form.id === "ticket-link-form") {
+    const result = validateLinkStep(new FormData(form));
+    if (!result.ok) { state.wizardError = result.message; render(); return; }
+    state.ticketDraft = { ...initialTicketDraft(), sourceLink: result.sourceLink, platform: result.platform, downloadProgress: 0 };
+    navigate("ticket-download");
     return;
   }
 
-  if (form.id === "job-create-form") {
-    createMockJob(new FormData(form));
+  if (form.id === "ticket-keyword-form") {
+    const result = validateKeywordStep(new FormData(form));
+    if (!result.ok) { state.wizardError = result.message; render(); return; }
+    state.ticketDraft.keywords = result.keywords;
+    state.ticketDraft.partnersLink = `https://partners.kikit.co/new?kw=${encodeURIComponent(result.keywords)}`;
+    navigate("ticket-partners-link");
   }
 });
 
