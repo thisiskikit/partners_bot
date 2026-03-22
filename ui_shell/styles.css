@@ -1,19 +1,19 @@
 :root {
   color-scheme: light;
-  --bg: #fffaf8;
-  --bg-soft: #fff5f6;
+  --bg: #f5f6f8;
+  --bg-soft: #eceff3;
   --surface: rgba(255, 255, 255, 0.92);
-  --surface-soft: #f9f3f1;
-  --surface-muted: #f4ece8;
-  --text: #1f1716;
-  --muted: #7f6f6c;
-  --accent: #f6dce3;
-  --accent-strong: #efc2d1;
-  --accent-deep: #d885a2;
-  --accent-ink: #5a3140;
-  --line: rgba(95, 63, 70, 0.12);
-  --shadow-soft: 0 20px 50px rgba(95, 58, 68, 0.08);
-  --shadow-card: 0 18px 32px rgba(71, 38, 47, 0.06);
+  --surface-soft: #e7ebf0;
+  --surface-muted: #dde3ea;
+  --text: #1d232b;
+  --muted: #5f6a78;
+  --accent: #d9e1ea;
+  --accent-strong: #c3cfdd;
+  --accent-deep: #73859c;
+  --accent-ink: #2f3d4f;
+  --line: rgba(57, 71, 89, 0.14);
+  --shadow-soft: 0 20px 50px rgba(33, 43, 55, 0.1);
+  --shadow-card: 0 18px 32px rgba(25, 35, 48, 0.08);
   --radius-xl: 32px;
   --radius-lg: 24px;
   --radius-md: 18px;
@@ -32,9 +32,9 @@ body {
 body {
   font-family: "Pretendard Variable", "Pretendard", "Noto Sans KR", "Segoe UI", sans-serif;
   background:
-    radial-gradient(circle at top left, rgba(242, 198, 214, 0.22), transparent 36%),
-    radial-gradient(circle at bottom right, rgba(244, 224, 229, 0.4), transparent 32%),
-    linear-gradient(180deg, #fffdfb 0%, #fff5f6 100%);
+    radial-gradient(circle at top left, rgba(168, 183, 201, 0.2), transparent 36%),
+    radial-gradient(circle at bottom right, rgba(197, 206, 219, 0.34), transparent 32%),
+    linear-gradient(180deg, #f7f8fa 0%, #eceff3 100%);
   color: var(--text);
 }
 
@@ -63,7 +63,7 @@ button {
   position: relative;
   width: min(100%, 430px);
   min-height: 100dvh;
-  background: linear-gradient(180deg, rgba(255, 251, 249, 0.98), rgba(255, 246, 247, 0.96));
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(238, 243, 248, 0.96));
   overflow: hidden;
 }
 
@@ -81,7 +81,7 @@ button {
   right: -40px;
   width: 220px;
   height: 220px;
-  background: rgba(243, 193, 208, 0.28);
+  background: rgba(170, 185, 204, 0.3);
 }
 
 .phone-shell::after {
@@ -89,7 +89,7 @@ button {
   left: -55px;
   width: 180px;
   height: 180px;
-  background: rgba(247, 230, 232, 0.48);
+  background: rgba(210, 220, 232, 0.45);
 }
 
 .screen {
@@ -124,7 +124,7 @@ button {
 
 .card-inset {
   background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(95, 63, 70, 0.08);
+  border: 1px solid rgba(57, 71, 89, 0.1);
   border-radius: 22px;
 }
 
@@ -138,8 +138,8 @@ button {
 .hero-card {
   border-radius: var(--radius-xl);
   background:
-    linear-gradient(140deg, rgba(255, 255, 255, 0.96), rgba(255, 244, 247, 0.94)),
-    linear-gradient(160deg, rgba(239, 194, 209, 0.22), rgba(255, 255, 255, 0));
+    linear-gradient(140deg, rgba(255, 255, 255, 0.96), rgba(236, 241, 247, 0.94)),
+    linear-gradient(160deg, rgba(195, 207, 221, 0.26), rgba(255, 255, 255, 0));
 }
 
 .lockup {
@@ -160,7 +160,7 @@ button {
 }
 
 .eyebrow {
-  background: rgba(246, 220, 227, 0.72);
+  background: rgba(217, 225, 234, 0.78);
   color: var(--accent-ink);
 }
 
@@ -174,7 +174,7 @@ button {
 
 .helper-note {
   background: rgba(255, 255, 255, 0.82);
-  border: 1px solid rgba(95, 63, 70, 0.08);
+  border: 1px solid rgba(57, 71, 89, 0.1);
   color: var(--muted);
 }
 
@@ -253,11 +253,11 @@ button {
   display: grid;
   place-items: center;
   border-radius: 16px;
-  border: 1px solid rgba(95, 63, 70, 0.08);
+  border: 1px solid rgba(57, 71, 89, 0.1);
 }
 
 .avatar {
-  background: linear-gradient(145deg, #f4d1dc, #fce9ee);
+  background: linear-gradient(145deg, #ccd7e4, #e7edf5);
   color: var(--accent-ink);
   font-weight: 700;
 }
@@ -300,9 +300,9 @@ button {
 }
 
 .button-primary {
-  background: linear-gradient(135deg, #efc2d1, #f8dde5);
+  background: linear-gradient(135deg, #c3cfdd, #dce5ef);
   color: var(--accent-ink);
-  box-shadow: 0 12px 24px rgba(216, 133, 162, 0.18);
+  box-shadow: 0 12px 24px rgba(73, 91, 115, 0.2);
 }
 
 .button-secondary {
@@ -359,19 +359,19 @@ button {
 }
 
 .badge-rose {
-  background: rgba(246, 220, 227, 0.92);
+  background: rgba(217, 225, 234, 0.92);
   color: var(--accent-ink);
 }
 
 .badge-soft {
-  background: rgba(249, 243, 241, 0.94);
+  background: rgba(231, 236, 243, 0.94);
   color: var(--muted);
-  border: 1px solid rgba(95, 63, 70, 0.08);
+  border: 1px solid rgba(57, 71, 89, 0.1);
 }
 
 .badge-ink {
-  background: #f4efed;
-  color: #4c3f3d;
+  background: #e3e9f0;
+  color: #3a4758;
 }
 
 .pill {
@@ -387,9 +387,9 @@ button {
 
 .pill.is-active,
 .pill:hover {
-  background: rgba(246, 220, 227, 0.92);
+  background: rgba(217, 225, 234, 0.92);
   color: var(--accent-ink);
-  border-color: rgba(216, 133, 162, 0.22);
+  border-color: rgba(115, 133, 156, 0.24);
 }
 
 .section {
@@ -416,7 +416,7 @@ button {
   padding: 16px;
   border-radius: 22px;
   background: rgba(255, 255, 255, 0.86);
-  border: 1px solid rgba(95, 63, 70, 0.08);
+  border: 1px solid rgba(57, 71, 89, 0.1);
   text-align: left;
 }
 
@@ -475,7 +475,7 @@ button {
 .progress-value {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #efc2d1, #d885a2);
+  background: linear-gradient(90deg, #c3cfdd, #73859c);
 }
 
 .input-wrap {
@@ -488,7 +488,7 @@ button {
 .select,
 .search-input {
   width: 100%;
-  border: 1px solid rgba(95, 63, 70, 0.12);
+  border: 1px solid rgba(57, 71, 89, 0.14);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.92);
   color: var(--text);
@@ -506,8 +506,8 @@ button {
 .textarea:focus,
 .select:focus,
 .search-input:focus {
-  border-color: rgba(216, 133, 162, 0.45);
-  box-shadow: 0 0 0 4px rgba(239, 194, 209, 0.2);
+  border-color: rgba(115, 133, 156, 0.5);
+  box-shadow: 0 0 0 4px rgba(195, 207, 221, 0.28);
 }
 
 .search-wrap {
@@ -542,7 +542,7 @@ button {
 .quote {
   padding: 14px 16px;
   border-radius: 18px;
-  background: rgba(249, 243, 241, 0.92);
+  background: rgba(231, 236, 243, 0.92);
   color: var(--text);
   font-size: 14px;
   line-height: 1.6;
@@ -562,7 +562,7 @@ button {
   height: 10px;
   border-radius: 999px;
   background: var(--accent-deep);
-  box-shadow: 0 0 0 4px rgba(246, 220, 227, 0.54);
+  box-shadow: 0 0 0 4px rgba(217, 225, 234, 0.54);
 }
 
 .timeline-item::after {
@@ -572,7 +572,7 @@ button {
   left: 8px;
   width: 2px;
   height: calc(100% + 8px);
-  background: rgba(95, 63, 70, 0.08);
+  background: rgba(57, 71, 89, 0.1);
 }
 
 .timeline-item:last-child::after {
@@ -592,7 +592,7 @@ button {
   transform: translateX(-50%);
   width: min(100%, 430px);
   padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
-  background: linear-gradient(180deg, rgba(255, 250, 248, 0), rgba(255, 250, 248, 0.92) 28%, rgba(255, 250, 248, 0.98) 100%);
+  background: linear-gradient(180deg, rgba(245, 247, 250, 0), rgba(245, 247, 250, 0.92) 28%, rgba(245, 247, 250, 0.98) 100%);
   z-index: 10;
 }
 
@@ -603,7 +603,7 @@ button {
   padding: 8px;
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.88);
-  border: 1px solid rgba(95, 63, 70, 0.08);
+  border: 1px solid rgba(57, 71, 89, 0.1);
   box-shadow: var(--shadow-soft);
   backdrop-filter: blur(18px);
 }
@@ -620,7 +620,7 @@ button {
 }
 
 .bottom-nav button.is-active {
-  background: rgba(246, 220, 227, 0.82);
+  background: rgba(217, 225, 234, 0.82);
   color: var(--accent-ink);
 }
 
@@ -657,7 +657,7 @@ button {
   .phone-shell {
     min-height: calc(100dvh - 56px);
     border-radius: 36px;
-    border: 1px solid rgba(95, 63, 70, 0.08);
+    border: 1px solid rgba(57, 71, 89, 0.1);
     box-shadow: var(--shadow-soft);
   }
 
