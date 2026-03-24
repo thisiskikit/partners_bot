@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import {
   aiAnalyzeItem,
   aiInboxParse,
@@ -29,10 +30,12 @@ interface AssistantCreatePayload {
 }
 
 interface AppShellProviderProps {
-  children: React.ReactNode;
+  children: ReactNode;
   onCreateInboxItem?: (payload: AssistantCreatePayload) => Promise<void> | void;
   onCreateEvent?: (payload: AssistantCreatePayload) => Promise<void> | void;
   onCreateMemo?: (payload: AssistantCreatePayload) => Promise<void> | void;
+  onAssignCategory?: (itemId: string, category: string) => Promise<void> | void;
+  onSaveAutomationRule?: (rule: RuleDraftResult) => Promise<void> | void;
 }
 
 export interface AppShellAiState {
@@ -53,11 +56,43 @@ export interface AppShellContextValue extends AppShellAiState {
   getItemActionPrompt: () => string;
   savePromptProfile: (promptKey: string, payload: UpdatePromptProfileRequest) => Promise<void>;
   confirmAssistantSave: (saveMode: AssistantSaveMode, sourceText: string) => Promise<{ ok: boolean; message: string }>;
+  assignFinanceCategory: (itemId: string) => Promise<{ ok: boolean; message: string }>;
+  approveRuleDraft: () => Promise<{ ok: boolean; message: string }>;
 }
 
 const AppShellContext = createContext<AppShellContextValue | null>(null);
 
-export function AppShellProvider({ children, onCreateInboxItem, onCreateEvent, onCreateMemo }: AppShellProviderProps) {
+function normalizeAnalyzeResult(result: AnalyzeItemResult): AnalyzeItemResult {
+  if (result.best_interpretation && Array.isArray(result.suggested_actions)) {
+    return result;
+  }
+
+  const confidence = typeof result.confidence === 'number' ? result.confidence : 0;
+  const recommendations = Array.isArray(result.recommendations) ? result.recommendations : [];
+
+  return {
+    ...result,
+    summary: result.summary || result.diagnosis || '',
+    best_interpretation: result.best_interpretation || result.diagnosis || '해석 정보 없음',
+    confidence,
+    approval_required: result.approval_required ?? result.risk_level === 'high',
+    suggested_actions:
+      result.suggested_actions ||
+      recommendations.map((label) => ({
+        type: 'noop',
+        label,
+      })),
+  };
+}
+
+export function AppShellProvider({
+  children,
+  onCreateInboxItem,
+  onCreateEvent,
+  onCreateMemo,
+  onAssignCategory,
+  onSaveAutomationRule,
+}: AppShellProviderProps) {
   const [loading, setLoading] = useState(false);
   const [inboxParse, setInboxParse] = useState<AppShellContextValue['inboxParse']>(null);
   const [analyzeItem, setAnalyzeItem] = useState<AppShellContextValue['analyzeItem']>(null);
@@ -87,6 +122,16 @@ export function AppShellProvider({ children, onCreateInboxItem, onCreateEvent, o
 
   const runAnalyzeItem = useCallback(async (payload: AnalyzeItemRequest) => {
     const result = await withLoading(() => aiAnalyzeItem(payload));
+
+    if (result.ok) {
+      const normalized = {
+        ...result,
+        result: normalizeAnalyzeResult(result.result),
+      };
+      setAnalyzeItem(normalized);
+      return normalized;
+    }
+
     setAnalyzeItem(result);
     return result;
   }, [withLoading]);
@@ -156,6 +201,37 @@ export function AppShellProvider({ children, onCreateInboxItem, onCreateEvent, o
     [inboxParse, onCreateEvent, onCreateInboxItem, onCreateMemo],
   );
 
+  const assignFinanceCategory = useCallback(
+    async (itemId: string) => {
+      if (!onAssignCategory) {
+        return { ok: false, message: '카테고리 변경 기능이 연결되지 않았습니다.' };
+      }
+      await onAssignCategory(itemId, 'finance');
+      return { ok: true, message: '재무 카테고리로 지정했어요.' };
+    },
+    [onAssignCategory],
+  );
+
+  const approveRuleDraft = useCallback(async () => {
+    if (!ruleDraft || ruleDraft.ok !== true) {
+      return { ok: false, message: '저장할 룰 초안이 없습니다.' };
+    }
+
+    if (!onSaveAutomationRule) {
+      return { ok: false, message: '룰 저장 기능이 연결되지 않았습니다.' };
+    }
+
+    const safeStatus = ruleDraft.result.approval_required ? 'proposed' : 'draft';
+    await onSaveAutomationRule({
+      ...ruleDraft.result,
+      status: safeStatus,
+    });
+    return {
+      ok: true,
+      message: safeStatus === 'proposed' ? '승인 대기 상태로 저장했어요.' : '룰 초안을 저장했어요.',
+    };
+  }, [onSaveAutomationRule, ruleDraft]);
+
   const value = useMemo<AppShellContextValue>(
     () => ({
       inboxParse,
@@ -172,6 +248,8 @@ export function AppShellProvider({ children, onCreateInboxItem, onCreateEvent, o
       getItemActionPrompt,
       savePromptProfile,
       confirmAssistantSave,
+      assignFinanceCategory,
+      approveRuleDraft,
     }),
     [
       inboxParse,
@@ -188,6 +266,8 @@ export function AppShellProvider({ children, onCreateInboxItem, onCreateEvent, o
       getItemActionPrompt,
       savePromptProfile,
       confirmAssistantSave,
+      assignFinanceCategory,
+      approveRuleDraft,
     ],
   );
 

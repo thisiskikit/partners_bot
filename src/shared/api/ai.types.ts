@@ -56,12 +56,23 @@ export interface AnalyzeItemRequest {
   [key: string]: unknown;
 }
 
+export interface AnalyzeItemAction {
+  type: 'assign_category' | 'create_memo' | 'noop' | string;
+  label: string;
+  reason?: string;
+  payload?: Record<string, unknown>;
+}
+
 export interface AnalyzeItemResult {
-  diagnosis: string;
-  risk_level: 'low' | 'medium' | 'high' | 'unknown' | string;
-  impact: string;
-  recommendations: string[];
+  summary: string;
+  best_interpretation: string;
   confidence: number;
+  suggested_actions: AnalyzeItemAction[];
+  approval_required: boolean;
+  diagnosis?: string;
+  risk_level?: 'low' | 'medium' | 'high' | 'unknown' | string;
+  impact?: string;
+  recommendations?: string[];
   raw_text?: string;
   parse_fallback?: boolean;
 }
@@ -81,9 +92,11 @@ export interface RuleDraftResult {
   rule_name: string;
   condition_text: string;
   category: string;
-  status: 'draft' | 'proposed' | string;
+  status: 'draft' | 'proposed' | 'active' | string;
   approval_required: boolean;
   actions: RuleDraftAction[];
+  rationale?: string;
+  risk_level?: 'low' | 'medium' | 'high' | string;
   raw_text?: string;
   parse_fallback?: boolean;
 }

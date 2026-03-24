@@ -1,4 +1,6 @@
 import { useEffect } from 'react';
+import type { ReactNode } from 'react';
+import type { RuleDraftResult } from '@/shared/api/ai.types';
 import { AppShellProvider, useAppShellContext } from './useAppShellContext';
 
 interface AssistantCreatePayload {
@@ -18,13 +20,15 @@ interface AssistantCreatePayload {
 }
 
 interface AppShellProps {
-  children: React.ReactNode;
+  children: ReactNode;
   onCreateInboxItem?: (payload: AssistantCreatePayload) => Promise<void> | void;
   onCreateEvent?: (payload: AssistantCreatePayload) => Promise<void> | void;
   onCreateMemo?: (payload: AssistantCreatePayload) => Promise<void> | void;
+  onAssignCategory?: (itemId: string, category: string) => Promise<void> | void;
+  onSaveAutomationRule?: (rule: RuleDraftResult) => Promise<void> | void;
 }
 
-function AppShellBootstrap({ children }: { children: React.ReactNode }) {
+function AppShellBootstrap({ children }: { children: ReactNode }) {
   const { loadPromptProfiles } = useAppShellContext();
 
   useEffect(() => {
@@ -37,9 +41,22 @@ function AppShellBootstrap({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-export function AppShell({ children, onCreateInboxItem, onCreateEvent, onCreateMemo }: AppShellProps) {
+export function AppShell({
+  children,
+  onCreateInboxItem,
+  onCreateEvent,
+  onCreateMemo,
+  onAssignCategory,
+  onSaveAutomationRule,
+}: AppShellProps) {
   return (
-    <AppShellProvider onCreateInboxItem={onCreateInboxItem} onCreateEvent={onCreateEvent} onCreateMemo={onCreateMemo}>
+    <AppShellProvider
+      onCreateInboxItem={onCreateInboxItem}
+      onCreateEvent={onCreateEvent}
+      onCreateMemo={onCreateMemo}
+      onAssignCategory={onAssignCategory}
+      onSaveAutomationRule={onSaveAutomationRule}
+    >
       <AppShellBootstrap>{children}</AppShellBootstrap>
     </AppShellProvider>
   );
