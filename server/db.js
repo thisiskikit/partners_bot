@@ -57,7 +57,7 @@ async function seedPromptProfiles() {
       content: [
         '당신은 파트너스 운영 자동화 어시스턴트입니다.',
         '항상 JSON만 반환하고 한국어로 간결하게 답변하세요.',
-        '추측이 필요한 경우 confidence를 낮추고 assumptions에 명시하세요.',
+        '명확하지 않은 정보는 clarification_needed와 confidence로 표현하세요.',
       ].join('\n'),
     },
     {
@@ -65,16 +65,17 @@ async function seedPromptProfiles() {
       title: '인박스 파싱 프롬프트',
       content: [
         '수신 메시지에서 업무 항목을 추출하세요.',
-        '필수 키: summary, category, priority, due_date, action_items[].',
-        '정보가 부족하면 missing_fields 배열에 누락 필드를 넣으세요.',
+        '필수 키: summary, category, priority, due_date, action_items[], detected_type, confidence, recommended_save_mode, clarification_needed.',
+        'JSON 객체만 반환하세요.',
       ].join('\n'),
     },
     {
       prompt_key: 'item_analysis_prompt',
       title: '항목 분석 프롬프트',
       content: [
-        '업무 항목의 리스크, 예상 난이도, 권장 다음 행동을 분석하세요.',
-        '필수 키: diagnosis, risk_level, impact, recommendations[], confidence.',
+        '업무 항목의 의미를 분석하고 실행 전 제안을 생성하세요.',
+        '필수 키: summary, best_interpretation, confidence, approval_required, suggested_actions[].',
+        'suggested_actions 요소에는 type, label을 포함하세요.',
       ].join('\n'),
     },
     {
@@ -82,8 +83,8 @@ async function seedPromptProfiles() {
       title: '자동화 룰 초안 프롬프트',
       content: [
         '운영 정책에 맞는 자동화 룰 초안을 생성하세요.',
-        '필수 키: rule_name, condition_text, category, status, approval_required, actions[].',
-        'status는 draft 또는 proposed 중 하나여야 합니다.',
+        '필수 키: rule_name, condition_text, category, status, approval_required, risk_level, actions[].',
+        '위험도가 medium/high 이면 approval_required를 true로 설정하세요.',
       ].join('\n'),
     },
     {
@@ -146,8 +147,39 @@ async function initDb() {
   await seedPromptProfiles();
 }
 
+function parseActionJson(actionJson) {
+  try {
+    return actionJson ? JSON.parse(actionJson) : [];
+  } catch (err) {
+    return [];
+  }
+}
+
 async function getPromptByKey(promptKey) {
   return get('SELECT * FROM prompt_profiles WHERE prompt_key = ?', [promptKey]);
+}
+
+async function listPromptProfiles() {
+  return all('SELECT * FROM prompt_profiles ORDER BY prompt_key ASC');
+}
+
+async function updatePromptProfile(promptKey, payload) {
+  const existing = await getPromptByKey(promptKey);
+  if (!existing) {
+    return null;
+  }
+
+  const title = payload.title || existing.title;
+  const content = payload.content || existing.content;
+
+  await run(
+    `UPDATE prompt_profiles
+     SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE prompt_key = ?`,
+    [title, content, promptKey],
+  );
+
+  return getPromptByKey(promptKey);
 }
 
 async function logAiRun({ endpoint, model, prompt_key, input_payload, output_payload, latency_ms }) {
@@ -158,6 +190,45 @@ async function logAiRun({ endpoint, model, prompt_key, input_payload, output_pay
   );
 }
 
+async function saveAutomationRule({
+  rule_name,
+  condition_text,
+  category,
+  status,
+  approval_required,
+  created_by,
+  actions,
+}) {
+  const result = await run(
+    `INSERT INTO automation_rules (name, condition_text, category, status, approval_required, created_by, action_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      rule_name,
+      condition_text,
+      category || 'general',
+      status || 'draft',
+      approval_required ? 1 : 0,
+      created_by || 'user',
+      JSON.stringify(actions || []),
+    ],
+  );
+
+  return getAutomationRuleById(result.lastID);
+}
+
+async function getAutomationRuleById(id) {
+  const row = await get('SELECT * FROM automation_rules WHERE id = ?', [id]);
+  if (!row) {
+    return null;
+  }
+
+  return {
+    ...row,
+    approval_required: Boolean(row.approval_required),
+    actions: parseActionJson(row.action_json),
+  };
+}
+
 module.exports = {
   db,
   run,
@@ -165,5 +236,8 @@ module.exports = {
   all,
   initDb,
   getPromptByKey,
+  listPromptProfiles,
+  updatePromptProfile,
   logAiRun,
+  saveAutomationRule,
 };

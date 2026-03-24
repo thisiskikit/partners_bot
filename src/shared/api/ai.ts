@@ -35,12 +35,19 @@ export function aiRuleDraft(payload: RuleDraftRequest) {
   });
 }
 
+export function saveAutomationRule(payload: RuleDraftResult & { created_by?: string }) {
+  return requestJson<{ ok: true; item: unknown }>('/api/automation/rules', {
+    method: 'POST',
+    body: payload,
+  });
+}
+
 export function getDashboardBriefing() {
   return requestJson<AiApiResponse<DashboardBriefingResult, '/api/ai/dashboard-briefing'>>('/api/ai/dashboard-briefing');
 }
 
 export function getPromptProfiles() {
-  return requestJson<PromptProfilesResponse>('/api/ai/prompt-profiles');
+  return requestJson<PromptProfilesResponse>('/api/prompt-profiles');
 }
 
 export function getPromptProfileMap(items: PromptProfile[]): Record<string, PromptProfile> {
@@ -51,7 +58,7 @@ export function getPromptProfileMap(items: PromptProfile[]): Record<string, Prom
 }
 
 export function updatePromptProfile(promptKey: string, payload: UpdatePromptProfileRequest) {
-  return requestJson<UpdatePromptProfileResponse>(`/api/ai/prompt-profiles/${encodeURIComponent(promptKey)}`, {
+  return requestJson<UpdatePromptProfileResponse>(`/api/prompt-profiles/${encodeURIComponent(promptKey)}`, {
     method: 'PUT',
     body: payload,
   });

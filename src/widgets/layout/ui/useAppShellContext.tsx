@@ -7,6 +7,7 @@ import {
   getDashboardBriefing,
   getPromptProfileMap,
   getPromptProfiles,
+  saveAutomationRule,
   updatePromptProfile,
 } from '@/shared/api/ai';
 import type {
@@ -217,15 +218,18 @@ export function AppShellProvider({
       return { ok: false, message: '저장할 룰 초안이 없습니다.' };
     }
 
-    if (!onSaveAutomationRule) {
-      return { ok: false, message: '룰 저장 기능이 연결되지 않았습니다.' };
-    }
-
     const safeStatus = ruleDraft.result.approval_required ? 'proposed' : 'draft';
-    await onSaveAutomationRule({
+    const payload = {
       ...ruleDraft.result,
       status: safeStatus,
-    });
+    };
+
+    if (onSaveAutomationRule) {
+      await onSaveAutomationRule(payload);
+    } else {
+      await saveAutomationRule(payload);
+    }
+
     return {
       ok: true,
       message: safeStatus === 'proposed' ? '승인 대기 상태로 저장했어요.' : '룰 초안을 저장했어요.',

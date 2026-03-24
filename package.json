@@ -4,11 +4,24 @@
   "private": true,
   "main": "server/index.js",
   "scripts": {
+    "dev": "vite",
+    "dev:server": "node server/index.js",
+    "build": "vite build",
+    "preview": "vite preview",
     "start": "node server/index.js",
-    "dev": "node server/index.js"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "express": "^4.21.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.4.1",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.11"
   }
 }
