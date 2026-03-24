@@ -32,12 +32,19 @@ export interface InboxParseRequest {
   [key: string]: unknown;
 }
 
+export type AssistantSaveMode = 'inbox' | 'event' | 'memo';
+
 export interface InboxParseResult {
   summary: string;
   category: string;
   priority: 'low' | 'medium' | 'high' | string;
   due_date: string | null;
   action_items: string[];
+  detected_type?: 'inbox' | 'event' | 'memo' | 'unknown' | string;
+  confidence?: number;
+  recommended_save_mode?: AssistantSaveMode;
+  clarification_needed?: boolean;
+  clarification_question?: string;
   missing_fields?: string[];
   raw_text?: string;
   parse_fallback?: boolean;

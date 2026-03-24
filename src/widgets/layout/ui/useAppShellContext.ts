@@ -12,6 +12,7 @@ import type {
   AiApiResponse,
   AnalyzeItemRequest,
   AnalyzeItemResult,
+  AssistantSaveMode,
   DashboardBriefingResult,
   InboxParseRequest,
   InboxParseResult,
@@ -20,6 +21,19 @@ import type {
   RuleDraftResult,
   UpdatePromptProfileRequest,
 } from '@/shared/api/ai.types';
+
+interface AssistantCreatePayload {
+  summary: string;
+  sourceText: string;
+  parsed: InboxParseResult;
+}
+
+interface AppShellProviderProps {
+  children: React.ReactNode;
+  onCreateInboxItem?: (payload: AssistantCreatePayload) => Promise<void> | void;
+  onCreateEvent?: (payload: AssistantCreatePayload) => Promise<void> | void;
+  onCreateMemo?: (payload: AssistantCreatePayload) => Promise<void> | void;
+}
 
 export interface AppShellAiState {
   inboxParse: AiApiResponse<InboxParseResult, '/api/ai/inbox-parse'> | null;
@@ -38,11 +52,12 @@ export interface AppShellContextValue extends AppShellAiState {
   refreshDashboardBriefing: () => Promise<AiApiResponse<DashboardBriefingResult, '/api/ai/dashboard-briefing'>>;
   getItemActionPrompt: () => string;
   savePromptProfile: (promptKey: string, payload: UpdatePromptProfileRequest) => Promise<void>;
+  confirmAssistantSave: (saveMode: AssistantSaveMode, sourceText: string) => Promise<{ ok: boolean; message: string }>;
 }
 
 const AppShellContext = createContext<AppShellContextValue | null>(null);
 
-export function AppShellProvider({ children }: { children: React.ReactNode }) {
+export function AppShellProvider({ children, onCreateInboxItem, onCreateEvent, onCreateMemo }: AppShellProviderProps) {
   const [loading, setLoading] = useState(false);
   const [inboxParse, setInboxParse] = useState<AppShellContextValue['inboxParse']>(null);
   const [analyzeItem, setAnalyzeItem] = useState<AppShellContextValue['analyzeItem']>(null);
@@ -104,6 +119,43 @@ export function AppShellProvider({ children }: { children: React.ReactNode }) {
     }));
   }, [withLoading]);
 
+  const confirmAssistantSave = useCallback(
+    async (saveMode: AssistantSaveMode, sourceText: string) => {
+      if (!inboxParse || inboxParse.ok !== true) {
+        return { ok: false, message: '먼저 메시지를 분석해 주세요.' };
+      }
+
+      const payload: AssistantCreatePayload = {
+        summary: inboxParse.result.summary,
+        sourceText,
+        parsed: inboxParse.result,
+      };
+
+      if (saveMode === 'inbox') {
+        if (!onCreateInboxItem) {
+          return { ok: false, message: '인박스 저장 기능이 연결되지 않았습니다.' };
+        }
+        await onCreateInboxItem(payload);
+        return { ok: true, message: '인박스에 저장했어요.' };
+      }
+
+      if (saveMode === 'event') {
+        if (!onCreateEvent) {
+          return { ok: false, message: '일정 저장 기능이 연결되지 않았습니다.' };
+        }
+        await onCreateEvent(payload);
+        return { ok: true, message: '일정으로 저장했어요.' };
+      }
+
+      if (!onCreateMemo) {
+        return { ok: false, message: '메모 저장 기능이 연결되지 않았습니다.' };
+      }
+      await onCreateMemo(payload);
+      return { ok: true, message: '메모로 저장했어요.' };
+    },
+    [inboxParse, onCreateEvent, onCreateInboxItem, onCreateMemo],
+  );
+
   const value = useMemo<AppShellContextValue>(
     () => ({
       inboxParse,
@@ -119,6 +171,7 @@ export function AppShellProvider({ children }: { children: React.ReactNode }) {
       refreshDashboardBriefing,
       getItemActionPrompt,
       savePromptProfile,
+      confirmAssistantSave,
     }),
     [
       inboxParse,
@@ -134,6 +187,7 @@ export function AppShellProvider({ children }: { children: React.ReactNode }) {
       refreshDashboardBriefing,
       getItemActionPrompt,
       savePromptProfile,
+      confirmAssistantSave,
     ],
   );
 
