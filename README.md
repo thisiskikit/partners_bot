@@ -39,7 +39,14 @@ npm run dev:server
 npm run dev
 ```
 
-프론트 서버는 기본적으로 `/api`를 `http://localhost:3000`으로 프록시합니다.
+프론트 서버는 `0.0.0.0:5173`에서 실행되며 기본적으로 `/api`를 `http://localhost:3000`으로 프록시합니다.
+
+배포 빌드 미리보기:
+```bash
+npm run build
+npm run preview
+```
+(미리보기는 `0.0.0.0:4173`)
 
 ## 5) 주요 엔드포인트
 
